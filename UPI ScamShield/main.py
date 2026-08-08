@@ -7,7 +7,7 @@ from datetime import datetime
 
 # Page Configuration
 st.set_page_config(
-    page_title="UPI ScamShield Beta",
+    page_title="UPI ScamShield",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
