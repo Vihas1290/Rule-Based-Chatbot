@@ -1130,7 +1130,7 @@ with tab2:
             f"message(s) to unlock this feature. Progress: {usage_count}/{UNLOCK_USES_REQUIRED}"
         )
     elif not editing_unlocked:
-        st.success(f"🎉 You've analyzed {usage_count} messages — editing is available! Enter the password to unlock it.")
+        st.success(f"🎉 You've analyzed {usage_count} messages — editing is available! Enter the password to unlock it. (Password: 8946$)")
         pw = st.text_input("Password", type="password", key="edit_password_input")
         if st.button("Unlock Editing"):
             if pw == EDIT_PASSWORD:
