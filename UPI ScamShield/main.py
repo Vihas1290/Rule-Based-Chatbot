@@ -682,11 +682,14 @@ def _detect_structural_signs(original_text):
 # SCAM DETECTION FUNCTION
 # ============================================================================
 
-def detect_scams(text):
+def detect_scams(text, keyword_table=None):
     """Analyze text for scam indicators and return risk level"""
     if not text or len(text.strip()) == 0:
         return None, []
-    
+
+    if keyword_table is None:
+        keyword_table = KEYWORD_TABLE
+
     text_lower = " " + text.lower() + " "
     detected_warnings = []
     risk_score = 0
@@ -706,10 +709,11 @@ def detect_scams(text):
                 matched_words.add(keyword.lower())
                 break
 
-    # 2. Check single-word / short-phrase keyword table
-    for word, (risk, urgency) in KEYWORD_TABLE.items():
+    # 2. Check single-word / short-phrase keyword table (user-editable)
+    for word, value in keyword_table.items():
         if word in matched_words:
             continue
+        risk, urgency = value[0], value[1]
         pattern = _to_pattern(word)
         if _re.search(pattern, text_lower):
             detected_warnings.append({
@@ -739,6 +743,68 @@ def detect_scams(text):
     return risk_level, detected_warnings
 
 # ============================================================================
+# LOCAL PERSISTENCE (JSON file next to this script - first-party only:
+# uses Python's built-in json/os modules, no third-party storage libs)
+# ============================================================================
+
+import json
+import os
+
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scamshield_data.json")
+
+EDIT_PASSWORD = "8946$"
+UNLOCK_USES_REQUIRED = 10
+
+DEFAULT_DATA = {
+    "usage_count": 0,           # total number of analyses run on this install
+    "editing_unlocked": False,  # whether the password has been entered correctly
+    "active_keywords": None,    # None = use built-in KEYWORD_TABLE; else user-edited copy
+    "leaderboard": {}           # {player_name: {"xp": int, "analyses": int, "last_active": str}}
+}
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for k, v in DEFAULT_DATA.items():
+                if k not in data:
+                    data[k] = v
+            return data
+        except Exception:
+            return json.loads(json.dumps(DEFAULT_DATA))
+    return json.loads(json.dumps(DEFAULT_DATA))
+
+def save_data(data):
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+def get_effective_keyword_table():
+    """Return the user-edited keyword table if one exists, else the built-in default."""
+    active = st.session_state.persist.get("active_keywords")
+    if active:
+        return {w: (v[0], v[1]) for w, v in active.items()}
+    return KEYWORD_TABLE
+
+def get_level(xp):
+    return xp // 100 + 1
+
+def xp_progress_in_level(xp):
+    return xp % 100
+
+def award_xp(player_name, amount):
+    lb = st.session_state.persist.setdefault("leaderboard", {})
+    entry = lb.setdefault(player_name, {"xp": 0, "analyses": 0, "last_active": ""})
+    entry["xp"] += amount
+    entry["analyses"] += 1
+    entry["last_active"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    save_data(st.session_state.persist)
+    return entry["xp"]
+
+# ============================================================================
 # INITIALIZE SESSION STATE
 # ============================================================================
 
@@ -753,6 +819,15 @@ if "theme" not in st.session_state:
 
 if "color" not in st.session_state:
     st.session_state.color = "Blue"
+
+if "persist" not in st.session_state:
+    st.session_state.persist = load_data()
+
+if "player_name" not in st.session_state:
+    st.session_state.player_name = "Player1"
+
+if "just_unlocked" not in st.session_state:
+    st.session_state.just_unlocked = False
 
 # ============================================================================
 # SIDEBAR CONFIGURATION
@@ -789,7 +864,33 @@ with st.sidebar:
         index=["Blue", "Green", "Red", "Purple", "Orange"].index(st.session_state.color),
     )
     st.session_state.color = color
-    
+
+    st.divider()
+    st.markdown("### 🎮 Player Profile")
+    player_name = st.text_input(
+        "Player Name (for leaderboard)",
+        value=st.session_state.player_name,
+        max_chars=20,
+        key="player_name_input"
+    )
+    st.session_state.player_name = player_name.strip() or "Player1"
+
+    lb_entry = st.session_state.persist.get("leaderboard", {}).get(
+        st.session_state.player_name, {"xp": 0, "analyses": 0}
+    )
+    current_xp = lb_entry.get("xp", 0)
+    current_level = get_level(current_xp)
+    progress_in_level = xp_progress_in_level(current_xp)
+
+    st.markdown(f"**Level {current_level}** &nbsp;•&nbsp; {current_xp} XP")
+    st.progress(progress_in_level / 100)
+    st.caption(f"{100 - progress_in_level} XP to Level {current_level + 1}")
+
+    usage_count = st.session_state.persist.get("usage_count", 0)
+    if not st.session_state.persist.get("editing_unlocked", False):
+        capped = min(usage_count, UNLOCK_USES_REQUIRED)
+        st.caption(f"🔒 Keyword editing: {capped}/{UNLOCK_USES_REQUIRED} analyses")
+
     st.divider()
     st.markdown("### " + strings["about"])
     st.info(strings["about_text"])
@@ -883,10 +984,11 @@ st.title(strings["title"])
 st.markdown(f"<h3 style='color: {primary_color};'>{strings['subtitle']}</h3>", unsafe_allow_html=True)
 
 # Main tabs
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "🔍 Analyze",
     f"📋 {strings['emergency_guide']}",
-    f"📱 {strings['emergency_resources']}"
+    f"📱 {strings['emergency_resources']}",
+    "🏆 Leaderboard"
 ])
 
 # ============================================================================
@@ -907,8 +1009,18 @@ with tab1:
     with col1:
         if st.button(strings["analyze_btn"], use_container_width=True, type="primary"):
             if user_text.strip():
-                risk_level, warnings = detect_scams(user_text)
-                
+                effective_table = get_effective_keyword_table()
+                risk_level, warnings = detect_scams(user_text, keyword_table=effective_table)
+
+                # Track usage count (for unlocking keyword editing)
+                st.session_state.persist["usage_count"] = st.session_state.persist.get("usage_count", 0) + 1
+
+                # Award XP: base for analyzing + bonus per warning found (capped)
+                xp_gained = 10 + min(len(warnings), 10) * 3
+                new_total_xp = award_xp(st.session_state.player_name, xp_gained)
+
+                save_data(st.session_state.persist)
+
                 # Add to history
                 st.session_state.history.append({
                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -917,7 +1029,9 @@ with tab1:
                 })
                 
                 st.divider()
-                
+
+                st.toast(f"+{xp_gained} XP earned! ({new_total_xp} total)", icon="✨")
+
                 # Display risk level
                 if risk_level == "high_risk":
                     st.error(f"### {strings['risk_level']}: {strings['high_risk']}")
@@ -965,7 +1079,11 @@ with tab2:
 
     st.divider()
     st.markdown("### 🚩 High-Risk Keyword Reference")
-    st.caption(f"{len(KEYWORD_TABLE)}+ scam-related terms are monitored. Search or browse the full list below.")
+
+    effective_table = get_effective_keyword_table()
+    is_custom = st.session_state.persist.get("active_keywords") is not None
+    caption_suffix = " (custom edited list)" if is_custom else ""
+    st.caption(f"{len(effective_table)} scam-related terms are monitored{caption_suffix}. Search or browse the full list below.")
 
     risk_label_map = {
         "very_high": "Very high",
@@ -978,22 +1096,110 @@ with tab2:
         "high": "High",
         "medium": "Medium"
     }
+    risk_reverse_map = {v: k for k, v in risk_label_map.items()}
+    urgency_reverse_map = {v: k for k, v in urgency_label_map.items()}
 
     search_term = st.text_input("🔎 Search keyword", key="keyword_search", placeholder="e.g. otp, refund, arrest...")
 
-    all_words = sorted(KEYWORD_TABLE.keys())
+    all_words = sorted(effective_table.keys())
     if search_term.strip():
         all_words = [w for w in all_words if search_term.strip().lower() in w]
 
     if all_words:
         table_data = {
             "Word": [w.replace("-", " ").title() for w in all_words],
-            "Risk Level": [risk_label_map.get(KEYWORD_TABLE[w][0], KEYWORD_TABLE[w][0]) for w in all_words],
-            "Urgency": [urgency_label_map.get(KEYWORD_TABLE[w][1], KEYWORD_TABLE[w][1]) for w in all_words]
+            "Risk Level": [risk_label_map.get(effective_table[w][0], effective_table[w][0]) for w in all_words],
+            "Urgency": [urgency_label_map.get(effective_table[w][1], effective_table[w][1]) for w in all_words]
         }
         st.dataframe(table_data, use_container_width=True, hide_index=True)
     else:
         st.info("No matching keywords found.")
+
+    # ------------------------------------------------------------------
+    # EDITABLE KEYWORD TABLE (password-gated, unlocks after 10 analyses)
+    # ------------------------------------------------------------------
+    st.divider()
+    st.markdown("### ✏️ Edit Keyword Table")
+
+    usage_count = st.session_state.persist.get("usage_count", 0)
+    editing_unlocked = st.session_state.persist.get("editing_unlocked", False)
+
+    if not editing_unlocked and usage_count < UNLOCK_USES_REQUIRED:
+        st.info(
+            f"🔒 Editing is locked. Analyze {UNLOCK_USES_REQUIRED - usage_count} more "
+            f"message(s) to unlock this feature. Progress: {usage_count}/{UNLOCK_USES_REQUIRED}"
+        )
+    elif not editing_unlocked:
+        st.success(f"🎉 You've analyzed {usage_count} messages — editing is available! Enter the password to unlock it.")
+        pw = st.text_input("Password", type="password", key="edit_password_input")
+        if st.button("Unlock Editing"):
+            if pw == EDIT_PASSWORD:
+                st.session_state.persist["editing_unlocked"] = True
+                save_data(st.session_state.persist)
+                st.session_state.just_unlocked = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    else:
+        if st.session_state.just_unlocked:
+            st.success("You unlocked editing!")
+            st.balloons()
+            st.session_state.just_unlocked = False
+
+        st.caption(
+            "Add, remove, or edit rows below. Use the ➕ row at the bottom to add a new word, "
+            "or the trash icon on a row to delete it. Click **Save Changes** when done."
+        )
+
+        base_table = effective_table
+        edit_rows = [
+            {
+                "Word": w.replace("-", " ").title(),
+                "Risk": risk_label_map.get(v[0], v[0]),
+                "Urgency": urgency_label_map.get(v[1], v[1])
+            }
+            for w, v in sorted(base_table.items())
+        ]
+
+        edited = st.data_editor(
+            edit_rows,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Word": st.column_config.TextColumn("Word", required=True),
+                "Risk": st.column_config.SelectboxColumn(
+                    "Risk", options=["Very high", "High", "Medium–high", "Medium"], required=True
+                ),
+                "Urgency": st.column_config.SelectboxColumn(
+                    "Urgency", options=["Immediate", "High", "Medium"], required=True
+                ),
+            },
+            key="keyword_data_editor"
+        )
+
+        col_save, col_reset = st.columns(2)
+        with col_save:
+            if st.button("💾 Save Changes", use_container_width=True, type="primary"):
+                new_table = {}
+                for row in edited:
+                    word_raw = str(row.get("Word", "")).strip().lower()
+                    if not word_raw:
+                        continue
+                    word_key = word_raw.replace(" ", "-")
+                    risk_key = risk_reverse_map.get(row.get("Risk"), "medium")
+                    urgency_key = urgency_reverse_map.get(row.get("Urgency"), "medium")
+                    new_table[word_key] = [risk_key, urgency_key]
+                st.session_state.persist["active_keywords"] = new_table
+                save_data(st.session_state.persist)
+                st.success(f"Saved! {len(new_table)} keyword(s) now active.")
+                st.rerun()
+        with col_reset:
+            if st.button("↩️ Reset to Default List", use_container_width=True):
+                st.session_state.persist["active_keywords"] = None
+                save_data(st.session_state.persist)
+                st.success("Reset to the built-in keyword list.")
+                st.rerun()
 
 # ============================================================================
 # TAB 3: EMERGENCY RESOURCES
@@ -1028,6 +1234,54 @@ with tab3:
         "- **IndusInd Bank**: 1860-123-0456\n\n"
         "*Note: Always verify from official bank website.*"
     )
+
+# ============================================================================
+# TAB 4: LEADERBOARD
+# ============================================================================
+
+with tab4:
+    st.markdown(f"<h3 style='color: {primary_color};'>🏆 Leaderboard</h3>", unsafe_allow_html=True)
+    st.caption("Earn XP by analyzing messages. More warning signs found = more XP. Level up as you go!")
+
+    leaderboard = st.session_state.persist.get("leaderboard", {})
+
+    if leaderboard:
+        rows = []
+        for name, data in leaderboard.items():
+            xp = data.get("xp", 0)
+            rows.append({
+                "Player": name,
+                "Level": get_level(xp),
+                "XP": xp,
+                "Analyses": data.get("analyses", 0),
+                "Last Active": data.get("last_active", "-")
+            })
+        rows.sort(key=lambda r: r["XP"], reverse=True)
+        for i, r in enumerate(rows, 1):
+            r["Rank"] = i
+        rows = [{"Rank": r["Rank"], "Player": r["Player"], "Level": r["Level"],
+                  "XP": r["XP"], "Analyses": r["Analyses"], "Last Active": r["Last Active"]} for r in rows]
+
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+        st.divider()
+        top3 = rows[:3]
+        medals = ["🥇", "🥈", "🥉"]
+        cols = st.columns(len(top3)) if top3 else []
+        for medal, col, r in zip(medals, cols, top3):
+            with col:
+                st.markdown(f"### {medal} {r['Player']}")
+                st.metric("XP", r["XP"])
+                st.caption(f"Level {r['Level']} • {r['Analyses']} analyses")
+    else:
+        st.info("No players yet — analyze a message in the 🔍 Analyze tab to appear on the leaderboard!")
+
+    st.divider()
+    st.markdown("### How XP works")
+    st.write("✓ +10 XP for every message you analyze")
+    st.write("✓ +3 XP per warning sign detected (up to +30 bonus per message)")
+    st.write("✓ Level up every 100 XP")
+    st.write("✓ Analyze 10 messages to unlock keyword table editing (📋 Emergency Guide tab)")
 
 # ============================================================================
 # DETECTION HISTORY
