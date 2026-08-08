@@ -1,22 +1,16 @@
 import streamlit as st
+import re
 from datetime import datetime
 
-# ============================================================================
-# UPI ScamShield - Complete Streamlit App (Streamlit Only, No Dependencies)
-# ============================================================================
-
-# Page Configuration
+# Page config
 st.set_page_config(
-    page_title="UPI ScamShield App",
+    page_title="UPI ScamShield",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ============================================================================
-# LANGUAGE DICTIONARY - Multi-language Support
-# ============================================================================
-
+# Language dictionary
 LANGUAGES = {
     "English": {
         "title": "UPI ScamShield",
@@ -50,28 +44,9 @@ LANGUAGES = {
         "resources": "🆘 Emergency Resources",
         "helpline": "Cybercrime Helpline: 1930",
         "portal": "National Cybercrime Portal: cybercrime.gov.in",
-        "no_analysis": "Enter text to analyze",
+        "no_analysis": "Enter text or upload an image to analyze",
         "history": "Detection History",
-        "clear_history": "Clear History",
-        "prevention_title": "🛡️ Prevention Tips",
-        "prevention_tips": [
-            "Never share your UPI PIN, OTP, or card details with anyone",
-            "Verify payment links before clicking",
-            "Use only official banking apps",
-            "Enable transaction alerts on your bank account",
-            "Be suspicious of unsolicited payment requests",
-            "Always verify caller ID before sharing sensitive info",
-            "Check bank website for actual customer care numbers",
-            "Look for HTTPS and official branding on payment pages"
-        ],
-        "bank_title": "📞 Bank Contact Numbers",
-        "bank_note": "Keep your bank's fraud helpline number saved:",
-        "about": "About",
-        "about_text": "UPI ScamShield helps you identify and protect against UPI fraud. Always verify before taking action.",
-        "footer": "UPI ScamShield - Your Personal Fraud Protection Assistant | Use responsibly and always verify information independently",
-        "settings": "⚙️ Settings",
-        "emergency_guide": "Emergency Guide",
-        "emergency_resources": "Emergency Resources"
+        "clear_history": "Clear History"
     },
     "Telugu": {
         "title": "UPI స్కామ్‌షీల్డ్",
@@ -81,14 +56,14 @@ LANGUAGES = {
         "color": "యాప్ రంగు",
         "input_method": "మీరు ఎలా తనిఖీ చేయాలనుకుంటున్నారు?",
         "paste_text": "టెక్స్ట్ అతికించండి",
-        "upload_image": "ఇమేజ్ అపోలోడ్ చేయండి",
+        "upload_image": "ఇమేజ్ అपోలోడ్ చేయండి",
         "enter_text": "సందేహాస్పద సందేశం, లింక్ లేదా వివరాలను ఇక్కడ నమోదు చేయండి...",
-        "upload_file": "స్క్రీన్‌షాట్ లేదా QR కోడ్ ఇమేజ్ అपలోడ్ చేయండి",
+        "upload_file": "స్క్రీన్‌షాట్ లేదా QR కోడ్ ఇమేజ్ అpload చేయండి",
         "analyze_btn": "స్కామ్‌ల కోసం విశ్లేషణ చేయండి",
         "risk_level": "ఝుందు స్థితి",
         "safe": "🟢 సురక్షితమైనది",
         "suspicious": "🟡 సందేహాస్పదమైనది",
-        "high_risk": "🔴 అధిక ఖతరా",
+        "high_risk": "🔴 అధిక ఖطरా",
         "warning_signs": "హెచ్చరిక సంకేతాలు కనుగొనబడ్డాయి",
         "no_warnings": "స్పష్టమైన హెచ్చరిక సంకేతాలు కనుగొనబడలేదు",
         "checklist_title": "⚠️ డబ్బు కోల్పోయారా? అత్యవసర చెక్‌లిస్ట్",
@@ -105,28 +80,9 @@ LANGUAGES = {
         "resources": "🆘 అత్యవసర వనరులు",
         "helpline": "సైబర్‌క్రైమ్ హెల్‌లైన్: 1930",
         "portal": "జాతీయ సైబర్‌క్రైమ్ పోర్టల్: cybercrime.gov.in",
-        "no_analysis": "విశ్లేషణ చేయడానికి టెక్స్ట్‌ను నమోదు చేయండి",
+        "no_analysis": "విశ్లేషణ చేయడానికి టెక్స్ట్‌ను నమోదు చేయండి లేదా ఇమేజ్ అpload చేయండి",
         "history": "కనుగొన్న చరిత్ర",
-        "clear_history": "చరిత్రను క్లియర్ చేయండి",
-        "prevention_title": "🛡️ నిరోధక చిట్కాలు",
-        "prevention_tips": [
-            "మీ UPI PIN, OTP లేదా కార్డ్ వివరాలను ఎవరితో పంచుకోవద్దు",
-            "చెల్లింపు లింక్‌లను క్లిక్ చేయడానికి ముందు ధృవీకరించండి",
-            "అధికారిక బ్యాంకింగ్ యాప్‌లను మాత్రమే ఉపయోగించండి",
-            "మీ బ్యాంక్ ఖాతాపై లెన్‌దెన్ అప్‌డేట్‌లను ఎనేబల్ చేయండి",
-            "అనుమతి లేని చెల్లింపు అభ్యర్థనల గురించి సందేహాస్పదంగా ఉండండి",
-            "సున్నితమైన సమాచారాన్ని పంచుకోసాగే ముందు కాలర్ ID ధృవీకరించండి",
-            "బ్యాంక్ వెబ్‌సైట్ నుండి వాస్తవ కస్టమర్ కేర్ నంబర్‌లను తనిఖీ చేయండి",
-            "చెల్లింపు పేజీలలో HTTPS మరియు అధికారిక బ్రాండింగ్‌ను చూడండి"
-        ],
-        "bank_title": "📞 బ్యాంక్ సంప్రదింపు సంఖ్యలు",
-        "bank_note": "మీ బ్యాంకు యొక్క మోసం సహాయరేఖ నంబర్ సేవ్ చేయండి:",
-        "about": "గురించి",
-        "about_text": "UPI ScamShield UPI మోసం నుండి రక్షణ పొందటానికి సహాయ చేస్తుంది. ఎల్లప్పుడు చర్య తీసుకోవడానికి ముందు ధృవీకరించండి.",
-        "footer": "UPI స్కామ్‌షీల్డ్ - మీ వ్యక్తిగత మోసం రక్షణ సహాయకుడు | బాధ్యతపూర్వకంగా ఉపయోగించండి మరియు ఎల్లప్పుడు స్వతంత్రంగా సమాచారాన్ని ధృవీకరించండి",
-        "settings": "⚙️ సెట్టింగ్‌లు",
-        "emergency_guide": "అత్యవసర గైడ్",
-        "emergency_resources": "అత్యవసర వనరులు"
+        "clear_history": "చరిత్రను క్లియర్ చేయండి"
     },
     "Hindi": {
         "title": "UPI स्कैमशील्ड",
@@ -160,84 +116,53 @@ LANGUAGES = {
         "resources": "🆘 आपातकालीन संसाधन",
         "helpline": "साइबर अपराध हेल्पलाइन: 1930",
         "portal": "राष्ट्रीय साइबर अपराध पोर्टल: cybercrime.gov.in",
-        "no_analysis": "विश्लेषण करने के लिए टेक्स्ट दर्ज करें",
+        "no_analysis": "विश्लेषण करने के लिए टेक्स्ट दर्ज करें या इमेज अपलोड करें",
         "history": "पता लगाने का इतिहास",
-        "clear_history": "इतिहास साफ करें",
-        "prevention_title": "🛡️ रोकथाम टिप्स",
-        "prevention_tips": [
-            "अपना UPI PIN, OTP या कार्ड विवरण किसी के साथ साझा न करें",
-            "भुगतान लिंक पर क्लिक करने से पहले सत्यापित करें",
-            "केवल आधिकारिक बैंकिंग ऐप्स का उपयोग करें",
-            "अपने बैंक खाते पर लेनदेन सतर्कता सक्षम करें",
-            "अनुमति न दी गई भुगतान अनुरोधों के बारे में संदेहास्पद रहें",
-            "संवेदनशील जानकारी साझा करने से पहले कॉलर ID सत्यापित करें",
-            "बैंक की वेबसाइट से वास्तविक कस्टमर केयर नंबर जांचें",
-            "भुगतान पृष्ठों पर HTTPS और आधिकारिक ब्रांडिंग देखें"
-        ],
-        "bank_title": "📞 बैंक संपर्क नंबर",
-        "bank_note": "अपने बैंक की धोखाधड़ी हेल्पलाइन नंबर सहेजें:",
-        "about": "के बारे में",
-        "about_text": "UPI ScamShield आपको UPI धोखाधड़ी की पहचान और सुरक्षा में मदद करता है। कार्रवाई करने से पहले हमेशा सत्यापित करें।",
-        "footer": "UPI स्कैमशील्ड - आपके व्यक्तिगत धोखाधड़ी संरक्षण सहायक | जिम्मेदारी से उपयोग करें और हमेशा स्वतंत्र रूप से जानकारी सत्यापित करें",
-        "settings": "⚙️ सेटिंग्स",
-        "emergency_guide": "आपातकालीन गाइड",
-        "emergency_resources": "आपातकालीन संसाधन"
+        "clear_history": "इतिहास साफ करें"
     }
 }
 
-# ============================================================================
-# SCAM DETECTION PATTERNS
-# ============================================================================
-
+# Scam detection keywords and patterns
 SCAM_PATTERNS = {
     "pay_to_receive": {
-        "keywords": ["pay to receive", "payment to get", "pay first", "send money to get", "deposit to receive"],
+        "keywords": ["pay to receive", "payment to get", "pay first", "send money to get"],
         "risk": "high",
         "message": "Asking you to pay to receive money is a classic scam"
     },
     "urgent_threats": {
-        "keywords": ["urgent", "immediately", "asap", "quick action", "before it's too late", "limited time", "act now", "hurry"],
+        "keywords": ["urgent", "immediately", "asap", "quick action", "before it's too late", "limited time"],
         "risk": "high",
         "message": "Urgent language and threats are common scam tactics"
     },
     "upi_pin_request": {
-        "keywords": ["upi pin", "enter pin", "confirm pin", "otp", "secret code", "password", "mpin"],
+        "keywords": ["upi pin", "enter pin", "confirm pin", "otp", "secret code", "password"],
         "risk": "high",
         "message": "Never share your UPI PIN or OTP with anyone"
     },
     "fake_customer_care": {
-        "keywords": ["customer care", "support team", "bank representative", "agent", "verify account", "confirm details", "update profile"],
+        "keywords": ["customer care", "support team", "bank representative", "agent", "verify account", "confirm details"],
         "risk": "medium",
         "message": "Verify numbers and contacts through official bank websites"
     },
     "money_transfer_link": {
-        "keywords": ["click here", "pay now", "transfer now", "process payment", "complete transaction", "tap here", "open link"],
+        "keywords": ["click here", "pay now", "transfer now", "process payment", "complete transaction"],
         "risk": "medium",
         "message": "Be cautious of unsolicited payment links"
     },
     "reward_lottery": {
-        "keywords": ["won", "reward", "lottery", "prize", "congratulations", "claim", "bonus", "free money", "cashback"],
+        "keywords": ["won", "reward", "lottery", "prize", "congratulations", "claim", "bonus", "free money"],
         "risk": "high",
         "message": "Lottery and reward scams are common fraud schemes"
     },
     "account_verification": {
-        "keywords": ["verify", "confirm", "update account", "enable", "disable", "reactivate", "locked", "suspended"],
+        "keywords": ["verify", "confirm", "update account", "enable", "disable", "reactivate", "locked"],
         "risk": "medium",
         "message": "Banks don't ask for personal details via messages"
-    },
-    "phishing": {
-        "keywords": ["update card", "add card", "link card", "invalid card", "expired card", "update payment"],
-        "risk": "high",
-        "message": "Phishing attempts asking for card/bank details are dangerous"
     }
 }
 
-# ============================================================================
-# SCAM DETECTION FUNCTION
-# ============================================================================
-
 def detect_scams(text):
-    """Analyze text for scam indicators and return risk level"""
+    """Analyze text for scam indicators"""
     if not text or len(text.strip()) == 0:
         return None, []
     
@@ -268,66 +193,51 @@ def detect_scams(text):
     
     return risk_level, detected_warnings
 
-# ============================================================================
-# INITIALIZE SESSION STATE
-# ============================================================================
-
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-if "lang" not in st.session_state:
-    st.session_state.lang = "English"
-
-if "theme" not in st.session_state:
-    st.session_state.theme = "Light"
-
-if "color" not in st.session_state:
-    st.session_state.color = "Blue"
-
-# ============================================================================
-# SIDEBAR CONFIGURATION
-# ============================================================================
-
+# Sidebar configuration
 with st.sidebar:
-    st.markdown("### " + LANGUAGES["English"]["settings"])
+    st.markdown("### ⚙️ Settings")
     
     # Language selection
     lang = st.selectbox(
         "Select Language",
         list(LANGUAGES.keys()),
-        index=list(LANGUAGES.keys()).index(st.session_state.lang),
         key="language_select"
     )
-    st.session_state.lang = lang
     
-    # Get current language strings
     strings = LANGUAGES[lang]
     
     # Theme selection
     theme = st.radio(
         strings["theme"],
         ["Light", "Dark", "System"],
-        index=["Light", "Dark", "System"].index(st.session_state.theme),
         horizontal=True
     )
-    st.session_state.theme = theme
     
     # Color selection
     color = st.selectbox(
         strings["color"],
-        ["Blue", "Green", "Red", "Purple", "Orange"],
-        index=["Blue", "Green", "Red", "Purple", "Orange"].index(st.session_state.color),
+        ["Blue", "Green", "Red", "Purple", "Orange"]
     )
-    st.session_state.color = color
     
     st.divider()
-    st.markdown("### " + strings["about"])
-    st.info(strings["about_text"])
+    st.markdown("### 📚 About")
+    st.info(
+        "UPI ScamShield helps you identify and protect against UPI fraud. "
+        "Always verify before taking action."
+    )
 
-# ============================================================================
-# COLOR AND THEME CONFIGURATION
-# ============================================================================
+# Apply theme and color
+if theme == "Dark":
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background-color: #0e1117;
+        color: #c9d1d9;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
+# Color mapping
 color_map = {
     "Blue": "#0066cc",
     "Green": "#28a745",
@@ -336,52 +246,38 @@ color_map = {
     "Orange": "#fd7e14"
 }
 
-primary_color = color_map.get(st.session_state.color, "#0066cc")
+primary_color = color_map.get(color, "#0066cc")
 
-# Apply theme CSS
-if st.session_state.theme == "Dark":
-    st.markdown("""
-    <style>
-    [data-testid="stAppViewContainer"] {
-        background-color: #0e1117;
-        color: #c9d1d9;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #161b22;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ============================================================================
-# MAIN CONTENT
-# ============================================================================
-
+# Main content
 st.title(strings["title"])
 st.markdown(f"<h3 style='color: {primary_color};'>{strings['subtitle']}</h3>", unsafe_allow_html=True)
 
-# Main tabs
-tab1, tab2, tab3 = st.tabs([
-    "🔍 Analyze",
-    f"📋 {strings['emergency_guide']}",
-    f"📱 {strings['emergency_resources']}"
-])
+# Initialize session state
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-# ============================================================================
-# TAB 1: ANALYZE
-# ============================================================================
+# Main tabs
+tab1, tab2, tab3 = st.tabs(["🔍 Analyze", "📋 Emergency Guide", "📱 Resources"])
 
 with tab1:
     st.markdown(f"<h3 style='color: {primary_color};'>Enter Details to Check</h3>", unsafe_allow_html=True)
     
-    user_text = st.text_area(
-        strings["enter_text"],
-        height=150,
-        placeholder="Paste the suspicious message here..."
-    )
-    
     col1, col2 = st.columns(2)
     
     with col1:
+        input_method = st.radio(
+            strings["input_method"],
+            [strings["paste_text"], strings["upload_image"]],
+            horizontal=True
+        )
+    
+    if input_method == strings["paste_text"]:
+        user_text = st.text_area(
+            strings["enter_text"],
+            height=150,
+            placeholder="Paste the suspicious message here..."
+        )
+        
         if st.button(strings["analyze_btn"], use_container_width=True, type="primary"):
             if user_text.strip():
                 risk_level, warnings = detect_scams(user_text)
@@ -416,13 +312,17 @@ with tab1:
                     st.divider()
                     st.markdown(f"### {strings['checklist_title']}")
                     for item in strings["checklist"]:
-                        st.write(item)
-            else:
-                st.info(strings["no_analysis"])
-
-# ============================================================================
-# TAB 2: EMERGENCY GUIDE
-# ============================================================================
+                        st.write(f"{item}")
+    
+    else:
+        uploaded_image = st.file_uploader(
+            strings["upload_file"],
+            type=["jpg", "jpeg", "png", "gif"]
+        )
+        
+        if uploaded_image is not None:
+            st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+            st.info("🔍 Image analysis would be performed here (requires OCR/ML model)")
 
 with tab2:
     st.markdown(f"<h3 style='color: {primary_color};'>{strings['checklist_title']}</h3>", unsafe_allow_html=True)
@@ -431,13 +331,36 @@ with tab2:
         st.write(item)
     
     st.divider()
-    st.markdown(f"### {strings['prevention_title']}")
-    for tip in strings["prevention_tips"]:
+    st.markdown("### 🛡️ Prevention Tips")
+    prevention_tips = {
+        "English": [
+            "Never share your UPI PIN, OTP, or card details with anyone",
+            "Verify payment links before clicking",
+            "Use only official banking apps",
+            "Enable transaction alerts on your bank account",
+            "Be suspicious of unsolicited payment requests",
+            "Always verify caller ID before sharing sensitive info"
+        ],
+        "Telugu": [
+            "మీ UPI PIN, OTP లేదా కార్డ్ వివరాలను ఎవరితో పంచుకోవద్దు",
+            "చెల్లింపు లिंक్‌లను క్లిక్ చేయడానికి ముందు ధృవీకరించండి",
+            "అధికారిక బ్యాంకింగ్ యాప్‌లను మాత్రమే ఉపయోగించండి",
+            "మీ బ్యాంక్ ఖాతాపై లెన్‌దెన్ అప్‌డేట్‌లను ఎనేబల్ చేయండి",
+            "అనుమతి లేని చెల్లింపు అభ్యర్థనల గురించి సందేహాస్పదంగా ఉండండి",
+            "సున్నితమైన సమాచారాన్ని పంచుకోసాగే ముందు కాలర్ ID ధృవీకరించండి"
+        ],
+        "Hindi": [
+            "अपना UPI PIN, OTP या कार्ड विवरण किसी के साथ साझा न करें",
+            "भुगतान लिंक पर क्लिक करने से पहले सत्यापित करें",
+            "केवल आधिकारिक बैंकिंग ऐप्स का उपयोग करें",
+            "अपने बैंक खाते पर लेनदेन सतर्कता सक्षम करें",
+            "अनुमति न दी गई भुगतान अनुरोधों के बारे में संदेहास्पद रहें",
+            "संवेदनशील जानकारी साझा करने से पहले कॉलर ID सत्यापित करें"
+        ]
+    }
+    
+    for tip in prevention_tips.get(lang, prevention_tips["English"]):
         st.write(f"✓ {tip}")
-
-# ============================================================================
-# TAB 3: EMERGENCY RESOURCES
-# ============================================================================
 
 with tab3:
     st.markdown(f"<h3 style='color: {primary_color};'>{strings['resources']}</h3>", unsafe_allow_html=True)
@@ -451,50 +374,39 @@ with tab3:
     
     with col2:
         st.markdown("### 🌐 Cybercrime Portal")
-        st.write("[National Cybercrime Reporting Portal](https://cybercrime.gov.in/)")
+        st.markdown("[National Cybercrime Reporting Portal](https://cybercrime.gov.in/)")
         st.write("File complaints online")
     
     st.divider()
     
-    st.markdown(f"### {strings['bank_title']}")
+    st.markdown("### 📞 Bank Contact Numbers")
     st.info(
-        f"{strings['bank_note']}\n\n"
+        "Keep your bank's fraud helpline number saved:\n\n"
         "- **HDFC Bank**: 1860-419-0888\n"
         "- **ICICI Bank**: 1860-102-4332\n"
         "- **SBI**: 1800-112-211\n"
-        "- **Axis Bank**: 1800-209-5959\n"
-        "- **Yes Bank**: 1860-106-7777\n"
-        "- **Kotak Bank**: 1800-266-6565\n"
-        "- **IndusInd Bank**: 1860-123-0456\n\n"
-        "*Note: Always verify from official bank website.*"
+        "- **Axis Bank**: 1800-209-5959\n\n"
+        "*Note: These are example numbers. Always verify from official bank website.*"
     )
 
-# ============================================================================
-# DETECTION HISTORY
-# ============================================================================
-
-st.divider()
-
+# History section
 if st.session_state.history:
+    st.divider()
     with st.expander(f"📋 {strings['history']} ({len(st.session_state.history)})"):
         for idx, record in enumerate(reversed(st.session_state.history[-10:]), 1):
             risk_emoji = "🟢" if record["risk"] == "safe" else "🟡" if record["risk"] == "suspicious" else "🔴"
             st.write(f"{idx}. {record['timestamp']} | {risk_emoji} {record['text']}")
         
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button(strings["clear_history"], use_container_width=True):
-                st.session_state.history = []
-                st.rerun()
+        if st.button(strings["clear_history"]):
+            st.session_state.history = []
+            st.rerun()
 
-# ============================================================================
-# FOOTER
-# ============================================================================
-
+# Footer
 st.divider()
 st.markdown(
-    f"<p style='text-align: center; color: #888; font-size: 12px;'>"
-    f"{strings['footer']}"
+    "<p style='text-align: center; color: #888;'>"
+    "UPI ScamShield - Your Personal Fraud Protection Assistant | "
+    "Use responsibly and always verify information independently"
     "</p>",
     unsafe_allow_html=True
 )
