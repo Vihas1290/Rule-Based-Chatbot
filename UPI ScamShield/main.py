@@ -749,6 +749,7 @@ def detect_scams(text, keyword_table=None):
 
 import json
 import os
+import hashlib
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scamshield_data.json")
 
@@ -759,7 +760,8 @@ DEFAULT_DATA = {
     "usage_count": 0,           # total number of analyses run on this install
     "editing_unlocked": False,  # whether the password has been entered correctly
     "active_keywords": None,    # None = use built-in KEYWORD_TABLE; else user-edited copy
-    "leaderboard": {}           # {player_name: {"xp": int, "analyses": int, "last_active": str}}
+    "leaderboard": {},          # {player_name: {"xp": int, "analyses": int, "last_active": str}}
+    "seen_text_hashes": []      # hashes of previously analyzed messages (XP anti-duplicate)
 }
 
 def load_data():
@@ -803,6 +805,27 @@ def award_xp(player_name, amount):
     entry["last_active"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     save_data(st.session_state.persist)
     return entry["xp"]
+
+MAX_SEEN_HASHES = 5000  # cap stored history to keep the local file small
+
+def _hash_text(text):
+    normalized = " ".join(text.strip().lower().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+def is_duplicate_text(text):
+    """Check if this exact message has already been analyzed (for XP anti-duplicate)."""
+    h = _hash_text(text)
+    return h in set(st.session_state.persist.get("seen_text_hashes", []))
+
+def register_text(text):
+    """Record this message's hash so it can't earn XP again."""
+    h = _hash_text(text)
+    seen = st.session_state.persist.setdefault("seen_text_hashes", [])
+    if h not in seen:
+        seen.append(h)
+        if len(seen) > MAX_SEEN_HASHES:
+            del seen[: len(seen) - MAX_SEEN_HASHES]
+        save_data(st.session_state.persist)
 
 # ============================================================================
 # INITIALIZE SESSION STATE
@@ -1012,14 +1035,21 @@ with tab1:
                 effective_table = get_effective_keyword_table()
                 risk_level, warnings = detect_scams(user_text, keyword_table=effective_table)
 
-                # Track usage count (for unlocking keyword editing)
-                st.session_state.persist["usage_count"] = st.session_state.persist.get("usage_count", 0) + 1
+                duplicate = is_duplicate_text(user_text)
 
-                # Award XP: base for analyzing + bonus per warning found (capped)
-                xp_gained = 10 + min(len(warnings), 10) * 3
-                new_total_xp = award_xp(st.session_state.player_name, xp_gained)
+                if duplicate:
+                    st.error("No duplicates for XP Scams 👾")
+                else:
+                    # Track usage count (for unlocking keyword editing)
+                    st.session_state.persist["usage_count"] = st.session_state.persist.get("usage_count", 0) + 1
 
-                save_data(st.session_state.persist)
+                    # Award XP: base for analyzing + bonus per warning found (capped)
+                    xp_gained = 10 + min(len(warnings), 10) * 3
+                    new_total_xp = award_xp(st.session_state.player_name, xp_gained)
+                    register_text(user_text)
+
+                    save_data(st.session_state.persist)
+                    st.toast(f"+{xp_gained} XP earned! ({new_total_xp} total)", icon="✨")
 
                 # Add to history
                 st.session_state.history.append({
@@ -1029,8 +1059,6 @@ with tab1:
                 })
                 
                 st.divider()
-
-                st.toast(f"+{xp_gained} XP earned! ({new_total_xp} total)", icon="✨")
 
                 # Display risk level
                 if risk_level == "high_risk":
@@ -1130,7 +1158,7 @@ with tab2:
             f"message(s) to unlock this feature. Progress: {usage_count}/{UNLOCK_USES_REQUIRED}"
         )
     elif not editing_unlocked:
-        st.success(f"🎉 You've analyzed {usage_count} messages — editing is available! Enter the password to unlock it. (Password: 8946$)")
+        st.success(f"🎉 You've analyzed {usage_count} messages — editing is available! Enter the password to unlock it.")
         pw = st.text_input("Password", type="password", key="edit_password_input")
         if st.button("Unlock Editing"):
             if pw == EDIT_PASSWORD:
