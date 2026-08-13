@@ -800,7 +800,7 @@ def xp_progress_in_level(xp):
 def award_xp(player_name, amount):
     lb = st.session_state.persist.setdefault("leaderboard", {})
     entry = lb.setdefault(player_name, {"xp": 0, "analyses": 0, "last_active": ""})
-    entry["xp"] += amount
+    entry["xp"] = max(0, entry["xp"] + amount)
     entry["analyses"] += 1
     entry["last_active"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     save_data(st.session_state.persist)
@@ -826,6 +826,41 @@ def register_text(text):
         if len(seen) > MAX_SEEN_HASHES:
             del seen[: len(seen) - MAX_SEEN_HASHES]
         save_data(st.session_state.persist)
+
+# ============================================================================
+# GIBBERISH DETECTION (random keyboard-mash strings like "dusgfhbnvcbxuyfg")
+# ============================================================================
+
+_VOWELS = set("aeiou")
+GIBBERISH_XP_PENALTY = -5
+
+def _looks_like_gibberish_word(word):
+    """Flag a single word as gibberish based on vowel scarcity / long consonant runs."""
+    w = _re.sub(r'[^a-z]', '', word.lower())
+    if len(w) < 5:
+        return False
+
+    vowel_count = sum(1 for c in w if c in _VOWELS)
+    vowel_ratio = vowel_count / len(w)
+
+    max_consonant_run = 0
+    current_run = 0
+    for c in w:
+        if c not in _VOWELS:
+            current_run += 1
+            max_consonant_run = max(max_consonant_run, current_run)
+        else:
+            current_run = 0
+
+    return vowel_ratio < 0.15 or max_consonant_run >= 5
+
+def is_gibberish_text(text):
+    """Return True if most 'words' (5+ letters) in the text look like random keyboard mashing."""
+    words = [w for w in _re.findall(r"[A-Za-z]+", text) if len(w) >= 5]
+    if not words:
+        return False
+    flagged = sum(1 for w in words if _looks_like_gibberish_word(w))
+    return (flagged / len(words)) >= 0.5
 
 # ============================================================================
 # INITIALIZE SESSION STATE
@@ -1036,9 +1071,15 @@ with tab1:
                 risk_level, warnings = detect_scams(user_text, keyword_table=effective_table)
 
                 duplicate = is_duplicate_text(user_text)
+                gibberish = is_gibberish_text(user_text)
 
                 if duplicate:
                     st.error("No duplicates for XP Scams 👾")
+                elif gibberish:
+                    new_total_xp = award_xp(st.session_state.player_name, GIBBERISH_XP_PENALTY)
+                    register_text(user_text)
+                    save_data(st.session_state.persist)
+                    st.error(f"🤖 Gibberish detected — {GIBBERISH_XP_PENALTY} XP ({new_total_xp} total)")
                 else:
                     # Track usage count (for unlocking keyword editing)
                     st.session_state.persist["usage_count"] = st.session_state.persist.get("usage_count", 0) + 1
