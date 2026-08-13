@@ -752,6 +752,7 @@ import os
 import hashlib
 
 DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scamshield_data.json")
+LEADERBOARD_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "leaderboard.json")
 
 EDIT_PASSWORD = "8946$"
 UNLOCK_USES_REQUIRED = 10
@@ -760,9 +761,10 @@ DEFAULT_DATA = {
     "usage_count": 0,           # total number of analyses run on this install
     "editing_unlocked": False,  # whether the password has been entered correctly
     "active_keywords": None,    # None = use built-in KEYWORD_TABLE; else user-edited copy
-    "leaderboard": {},          # {player_name: {"xp": int, "analyses": int, "last_active": str}}
     "seen_text_hashes": []      # hashes of previously analyzed messages (XP anti-duplicate)
 }
+
+DEFAULT_LEADERBOARD = {}        # {player_name: {"xp": int, "analyses": int, "last_active": str}}
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -778,9 +780,31 @@ def load_data():
     return json.loads(json.dumps(DEFAULT_DATA))
 
 def save_data(data):
+    # Never let the leaderboard live inside this file - it has its own dedicated JSON store
+    to_write = {k: v for k, v in data.items() if k != "leaderboard"}
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            json.dump(to_write, f, indent=2)
+    except Exception:
+        pass
+
+# ----------------------------------------------------------------------
+# DEDICATED LEADERBOARD JSON STORE (leaderboard.json)
+# ----------------------------------------------------------------------
+
+def load_leaderboard():
+    if os.path.exists(LEADERBOARD_FILE):
+        try:
+            with open(LEADERBOARD_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return dict(DEFAULT_LEADERBOARD)
+    return dict(DEFAULT_LEADERBOARD)
+
+def save_leaderboard(leaderboard):
+    try:
+        with open(LEADERBOARD_FILE, "w", encoding="utf-8") as f:
+            json.dump(leaderboard, f, indent=2)
     except Exception:
         pass
 
@@ -798,12 +822,12 @@ def xp_progress_in_level(xp):
     return xp % 100
 
 def award_xp(player_name, amount):
-    lb = st.session_state.persist.setdefault("leaderboard", {})
+    lb = st.session_state.leaderboard
     entry = lb.setdefault(player_name, {"xp": 0, "analyses": 0, "last_active": ""})
     entry["xp"] = max(0, entry["xp"] + amount)
     entry["analyses"] += 1
     entry["last_active"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    save_data(st.session_state.persist)
+    save_leaderboard(lb)
     return entry["xp"]
 
 MAX_SEEN_HASHES = 5000  # cap stored history to keep the local file small
@@ -881,6 +905,9 @@ if "color" not in st.session_state:
 if "persist" not in st.session_state:
     st.session_state.persist = load_data()
 
+if "leaderboard" not in st.session_state:
+    st.session_state.leaderboard = load_leaderboard()
+
 if "player_name" not in st.session_state:
     st.session_state.player_name = "Player1"
 
@@ -933,7 +960,7 @@ with st.sidebar:
     )
     st.session_state.player_name = player_name.strip() or "Player1"
 
-    lb_entry = st.session_state.persist.get("leaderboard", {}).get(
+    lb_entry = st.session_state.leaderboard.get(
         st.session_state.player_name, {"xp": 0, "analyses": 0}
     )
     current_xp = lb_entry.get("xp", 0)
@@ -1312,7 +1339,7 @@ with tab4:
     st.markdown(f"<h3 style='color: {primary_color};'>🏆 Leaderboard</h3>", unsafe_allow_html=True)
     st.caption("Earn XP by analyzing messages. More warning signs found = more XP. Level up as you go!")
 
-    leaderboard = st.session_state.persist.get("leaderboard", {})
+    leaderboard = st.session_state.leaderboard
 
     if leaderboard:
         rows = []
