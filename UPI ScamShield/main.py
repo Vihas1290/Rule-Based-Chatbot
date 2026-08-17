@@ -1068,9 +1068,9 @@ def render_warning_grid(warning_list, cols=3):
 st.title(strings["title"])
 st.markdown(f"<h3 style='color: {primary_color};'>{strings['subtitle']}</h3>", unsafe_allow_html=True)
 st.markdown(
-    "<h3 style='font-size: 15px; font-weight: 600; letter-spacing: 0.5px; opacity: 0.75; margin-top: -8px;'>"
+    "<h2 style='font-size: 15px; font-weight: 600; letter-spacing: 0.5px; opacity: 0.75; margin-top: -8px;'>"
     "Stop. Scan. Stay Safe."
-    "</h3>",
+    "</h2>",
     unsafe_allow_html=True
 )
 
